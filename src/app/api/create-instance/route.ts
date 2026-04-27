@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = 'http://209.38.71.49:8080';
-const AUTH_TOKEN = 'caf2856530a821792e01bcafe3c6eb02a41395f4df702d8405570fb34da34615';
+const API_BASE = (process.env.DINASTIAPI_BASE_URL || 'http://209.38.71.49:8080').replace(/\/$/, '');
+const AUTH_TOKEN = process.env.DINASTIAPI_ADMIN_TOKEN || 'caf2856530a821792e01bcafe3c6eb02a41395f4df702d8405570fb34da34615';
 
 async function getQRCode(apiToken: string, maxRetries = 10): Promise<string> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -9,7 +9,6 @@ async function getQRCode(apiToken: string, maxRetries = 10): Promise<string> {
       method: 'GET',
       headers: {
         'accept': 'application/json',
-        'Authorization': AUTH_TOKEN,
         'token': apiToken,
       },
     });
@@ -46,18 +45,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nome e token são obrigatórios' }, { status: 400 });
     }
 
-    // Passo 1: Criar instância
-    const formData = new URLSearchParams();
-    formData.append('name', name);
-    formData.append('token', userToken);
-
     const createResponse = await fetch(`${API_BASE}/admin/users`, {
       method: 'POST',
       headers: {
         'Authorization': AUTH_TOKEN,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify({
+        name,
+        token: userToken,
+      }),
     });
 
     if (!createResponse.ok) {
@@ -66,7 +63,12 @@ export async function POST(request: NextRequest) {
     }
 
     const createData = await createResponse.json();
-    const instanceToken = createData.token || createData.api_token || userToken;
+    const instanceToken =
+      createData?.data?.token ||
+      createData?.data?.api_token ||
+      createData?.token ||
+      createData?.api_token ||
+      userToken;
 
     // Aguardar instância ser criada e processada
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -75,7 +77,6 @@ export async function POST(request: NextRequest) {
     const connectResponse = await fetch(`${API_BASE}/session/connect`, {
       method: 'POST',
       headers: {
-        'Authorization': AUTH_TOKEN,
         'token': instanceToken,
         'Content-Type': 'application/json',
       },
