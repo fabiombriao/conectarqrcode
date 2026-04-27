@@ -7,14 +7,18 @@ export default function Home() {
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
   const [loadingAction, setLoadingAction] = useState<'create' | 'connect' | 'qr' | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [creationResult, setCreationResult] = useState('');
   const [connectionResult, setConnectionResult] = useState('');
   const [qrStatus, setQrStatus] = useState('');
+  const [statusResult, setStatusResult] = useState('');
+  const [statusConnected, setStatusConnected] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const [error, setError] = useState('');
   const [instanceToken, setInstanceToken] = useState('');
   const [instanceCreated, setInstanceCreated] = useState(false);
   const [instanceConnected, setInstanceConnected] = useState(false);
+  const [connectionStatusChecked, setConnectionStatusChecked] = useState(false);
 
   const sanitizeInput = (value: string) => {
     return value.replace(/[^a-zA-Z0-9]/g, '');
@@ -39,9 +43,13 @@ export default function Home() {
     setCreationResult('');
     setConnectionResult('');
     setQrStatus('');
+    setStatusResult('');
+    setStatusConnected(false);
+    setStatusLoading(false);
     setInstanceToken('');
     setInstanceCreated(false);
     setInstanceConnected(false);
+    setConnectionStatusChecked(false);
     setLoadingAction('create');
 
     try {
@@ -72,6 +80,8 @@ export default function Home() {
     setError('');
     setConnectionResult('');
     setQrStatus('');
+    setStatusResult('');
+    setStatusConnected(false);
     setQrCode('');
     setLoadingAction('connect');
 
@@ -104,6 +114,8 @@ export default function Home() {
     setError('');
     setQrCode('');
     setQrStatus('Aguardando QR Code...');
+    setStatusResult('');
+    setConnectionStatusChecked(false);
     setLoadingAction('qr');
 
     try {
@@ -139,6 +151,40 @@ export default function Home() {
     }
   };
 
+  const handleCheckConnectionStatus = async () => {
+    setError('');
+    setStatusResult('');
+    setStatusLoading(true);
+
+    try {
+      const response = await fetch('/api/check-connection-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: instanceToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+
+      const data = await response.json();
+      const status = data?.data;
+      const connected = Boolean(status?.connected || status?.loggedIn || status?.session?.connected);
+
+      setConnectionStatusChecked(true);
+      setStatusConnected(connected);
+      setStatusResult(
+        connected
+          ? 'Instância conectada com sucesso. Você já pode usar a sessão.'
+          : 'A instância ainda não está conectada. Se já escaneou o QR Code, tente novamente em alguns segundos.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setName('');
     setToken('');
@@ -147,9 +193,13 @@ export default function Home() {
     setCreationResult('');
     setConnectionResult('');
     setQrStatus('');
+    setStatusResult('');
+    setStatusConnected(false);
+    setStatusLoading(false);
     setInstanceToken('');
     setInstanceCreated(false);
     setInstanceConnected(false);
+    setConnectionStatusChecked(false);
     setLoadingAction(null);
   };
 
@@ -233,6 +283,25 @@ export default function Home() {
           </button>
         )}
 
+        {qrCode && !connectionStatusChecked && (
+          <div className="mt-8 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-left">
+            <p className="text-emerald-300 text-sm font-semibold">
+              QR Code pronto. Depois de escanear, confira o status da conexão abaixo.
+            </p>
+          </div>
+        )}
+
+        {qrCode && (
+          <button
+            type="button"
+            onClick={handleCheckConnectionStatus}
+            disabled={loadingAction !== null || statusLoading || !instanceToken}
+            className="mt-6 w-full py-4 bg-[#0f766e] text-white font-bold rounded-lg hover:bg-[#115e59] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#0f766e]/20"
+          >
+            {statusLoading ? 'Verificando status...' : 'Conferir Status da Conexão'}
+          </button>
+        )}
+
         {loadingAction && (
           <div className="mt-8">
             <div className="w-6 h-6 border-2 border-white/10 border-l-[#e89d2c] rounded-full animate-spin mx-auto mb-3" />
@@ -244,9 +313,22 @@ export default function Home() {
           </div>
         )}
 
+        {statusLoading && (
+          <div className="mt-8">
+            <div className="w-6 h-6 border-2 border-white/10 border-l-[#0f766e] rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-gray-400 text-sm font-medium">Consultando status da conexão...</p>
+          </div>
+        )}
+
         {qrStatus && (
           <div className="mt-6 text-emerald-400 text-sm font-medium">
             {qrStatus}
+          </div>
+        )}
+
+        {statusResult && (
+          <div className={`mt-6 text-sm font-medium ${statusConnected ? 'text-emerald-400' : 'text-amber-300'}`}>
+            {statusResult}
           </div>
         )}
 
