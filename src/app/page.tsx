@@ -6,6 +6,7 @@ import Image from 'next/image';
 export default function Home() {
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
+  const [locationId, setLocationId] = useState('');
   const [loadingAction, setLoadingAction] = useState<'create' | 'connect' | 'qr' | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [creationResult, setCreationResult] = useState('');
@@ -46,6 +47,7 @@ export default function Home() {
     setStatusResult('');
     setStatusConnected(false);
     setStatusLoading(false);
+    setLocationId('');
     setInstanceToken('');
     setInstanceCreated(false);
     setInstanceConnected(false);
@@ -137,12 +139,6 @@ export default function Home() {
 
       setQrCode(data.qrCode);
       setQrStatus('QR Code gerado com sucesso!');
-
-      await fetch('https://dinastia-n8n-webhook.rphhuc.easypanel.host/webhook/criar_instancia_qrcode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, token: instanceToken, status: 'completed' }),
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setQrStatus('');
@@ -160,7 +156,7 @@ export default function Home() {
       const response = await fetch('/api/check-connection-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: instanceToken }),
+        body: JSON.stringify({ name, token: instanceToken, locationId }),
       });
 
       if (!response.ok) {
@@ -182,9 +178,17 @@ export default function Home() {
       setStatusConnected(connected);
       setStatusResult(
         connected
-          ? 'Instância conectada com sucesso. Você já pode usar a sessão.'
+          ? `Instância conectada com sucesso.${data?.webhookSent ? ' Webhook enviado com locationId.' : ''}`
           : 'A instância ainda não está conectada. Se já escaneou o QR Code, tente novamente em alguns segundos.',
       );
+
+      if (connected && !data?.webhookSent) {
+        setStatusResult(
+          data?.webhookError
+            ? `Instância conectada com sucesso, mas o webhook falhou: ${data.webhookError}`
+            : 'Instância conectada com sucesso, mas o webhook não foi enviado.',
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
@@ -203,6 +207,7 @@ export default function Home() {
     setStatusResult('');
     setStatusConnected(false);
     setStatusLoading(false);
+    setLocationId('');
     setInstanceToken('');
     setInstanceCreated(false);
     setInstanceConnected(false);
@@ -241,6 +246,20 @@ export default function Home() {
               value={token}
               onChange={(e) => setToken(sanitizeInput(e.target.value))}
               placeholder="Ex: token123abc"
+              required
+              className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
+            />
+          </div>
+
+          <div className="text-left">
+            <label className="block text-white text-sm font-semibold mb-2">
+              locationId
+            </label>
+            <input
+              type="text"
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              placeholder="Ex: 12345"
               required
               className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
             />
@@ -302,7 +321,7 @@ export default function Home() {
           <button
             type="button"
             onClick={handleCheckConnectionStatus}
-            disabled={loadingAction !== null || statusLoading || !instanceToken}
+            disabled={loadingAction !== null || statusLoading || !instanceToken || !locationId}
             className="mt-6 w-full py-4 bg-[#0f766e] text-white font-bold rounded-lg hover:bg-[#115e59] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#0f766e]/20"
           >
             {statusLoading ? 'Verificando status...' : 'Conferir Status da Conexão'}

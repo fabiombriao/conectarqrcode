@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDinastiConfig } from '../dinasti';
 
+const STATUS_WEBHOOK_URL = 'https://dinastia-n8n-webhook.rphhuc.easypanel.host/webhook/criar_instancia_qrcode';
+
 export async function POST(request: NextRequest) {
   try {
     const { apiBase } = getDinastiConfig();
     const body = await request.json();
     const token = body?.token?.trim();
+    const name = body?.name?.trim();
+    const locationId = body?.locationId?.trim();
 
     if (!token) {
       return NextResponse.json({ error: 'Token da instância é obrigatório' }, { status: 400 });
@@ -40,7 +44,47 @@ export async function POST(request: NextRequest) {
     }
 
     const statusData = await statusResponse.json();
-    return NextResponse.json({ success: true, data: statusData });
+    const sessionData = statusData?.data ?? statusData;
+    const connected = Boolean(
+      sessionData?.connected ||
+      sessionData?.loggedIn ||
+      sessionData?.session?.connected ||
+      sessionData?.session?.loggedIn ||
+      sessionData?.data?.connected ||
+      sessionData?.data?.loggedIn,
+    );
+
+    let webhookSent = false;
+    let webhookError = '';
+
+    if (connected && name && locationId) {
+      const webhookResponse = await fetch(STATUS_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          token,
+          locationId,
+          status: 'connected',
+        }),
+      });
+
+      webhookSent = webhookResponse.ok;
+
+      if (!webhookResponse.ok) {
+        webhookError = await webhookResponse.text();
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: statusData,
+      connected,
+      webhookSent,
+      webhookError,
+    });
   } catch (error) {
     console.error('Erro:', error);
     return NextResponse.json(
