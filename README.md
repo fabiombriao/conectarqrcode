@@ -1,5 +1,14 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Set these on Vercel and in local development:
+
+```bash
+DINASTIAPI_BASE_URL=http://209.38.71.49:8080
+DINASTIAPI_ADMIN_TOKEN=replace_with_admin_token
+```
+
 ## Getting Started
 
 First, run the development server:
