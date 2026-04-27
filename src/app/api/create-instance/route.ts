@@ -3,6 +3,39 @@ import { NextRequest, NextResponse } from 'next/server';
 const API_BASE = 'http://209.38.71.49:8080';
 const AUTH_TOKEN = 'caf2856530a821792e01bcafe3c6eb02a41395f4df702d8405570fb34da34615';
 
+async function getQRCode(token: string, maxRetries = 10): Promise<string> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const qrResponse = await fetch(`${API_BASE}/session/qr`, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json',
+        'Authorization': AUTH_TOKEN,
+        'token': token,
+      },
+    });
+
+    if (qrResponse.ok) {
+      const qrData = await qrResponse.json();
+
+      // Verificar diferentes formatos de resposta
+      if (qrData.code) return qrData.code;
+      if (qrData.base64) return qrData.base64;
+      if (qrData.qrcode?.code) return qrData.qrcode.code;
+    }
+
+    // Se não for 404 ou última tentativa, throw erro
+    if (qrResponse.status !== 404 || attempt === maxRetries) {
+      const errorText = await qrResponse.text();
+      throw new Error(`Erro ao gerar QR Code: ${qrResponse.status} - ${errorText}`);
+    }
+
+    // Aguardar antes da próxima tentativa (tempo crescente)
+    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+  }
+
+  throw new Error('QR Code não disponível após múltiplas tentativas');
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -31,8 +64,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erro ao criar instância: ${createResponse.status} - ${errorText}` }, { status: createResponse.status });
     }
 
-    // Aguardar instância ser criada
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Aguardar instância ser criada e processada
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Passo 2: Conectar ao WhatsApp
     const connectResponse = await fetch(`${API_BASE}/session/connect`, {
@@ -53,37 +86,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Erro ao conectar: ${connectResponse.status} - ${errorText}` }, { status: connectResponse.status });
     }
 
-    // Aguardar QR Code ser gerado
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Passo 3: Recuperar QR Code
-    const qrResponse = await fetch(`${API_BASE}/session/qr`, {
-      method: 'GET',
-      headers: {
-        'accept': 'application/json',
-        'Authorization': AUTH_TOKEN,
-        'token': token,
-      },
-    });
-
-    if (!qrResponse.ok) {
-      const errorText = await qrResponse.text();
-      return NextResponse.json({ error: `Erro ao gerar QR Code: ${qrResponse.status} - ${errorText}` }, { status: qrResponse.status });
-    }
-
-    const qrData = await qrResponse.json();
-
-    // Extrair QR Code base64 da resposta
-    let qrCodeBase64 = '';
-    if (qrData.code) {
-      qrCodeBase64 = qrData.code;
-    } else if (qrData.base64) {
-      qrCodeBase64 = qrData.base64;
-    } else if (qrData.qrcode?.code) {
-      qrCodeBase64 = qrData.qrcode.code;
-    } else {
-      return NextResponse.json({ error: 'QR Code não encontrado na resposta', data: qrData }, { status: 500 });
-    }
+    // Passo 3: Recuperar QR Code com retry
+    const qrCodeBase64 = await getQRCode(token);
 
     return NextResponse.json({ qrCode: qrCodeBase64 });
 
