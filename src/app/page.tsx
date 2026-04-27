@@ -15,6 +15,10 @@ export default function Home() {
     return value.replace(/[^a-zA-Z0-9]/g, '');
   };
 
+  const getQrImageSrc = (value: string) => {
+    return value.startsWith('data:image/') ? value : `data:image/png;base64,${value}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -132,7 +136,7 @@ export default function Home() {
             <h2 className="text-white text-lg font-semibold mb-4">Leia o QR Code</h2>
             <div className="bg-white p-4 rounded-lg inline-block border border-[#333]">
               <Image
-                src={`data:image/png;base64,${qrCode}`}
+                src={getQrImageSrc(qrCode)}
                 alt="QR Code WhatsApp"
                 width={250}
                 height={250}

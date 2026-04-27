@@ -11,6 +11,10 @@ function getConfig() {
   return { apiBase, adminToken };
 }
 
+function normalizeQRCodeValue(value: string) {
+  return value.replace(/^data:image\/png;base64,/, '');
+}
+
 async function getQRCode(apiBase: string, apiToken: string, maxRetries = 10): Promise<string> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const qrResponse = await fetch(`${apiBase}/session/qr`, {
@@ -24,11 +28,26 @@ async function getQRCode(apiBase: string, apiToken: string, maxRetries = 10): Pr
     if (qrResponse.ok) {
       const qrData = await qrResponse.json();
 
-      // Verificar diferentes formatos de resposta
-      if (qrData.code) return qrData.code;
-      if (qrData.base64) return qrData.base64;
-      if (qrData.qrcode?.code) return qrData.qrcode.code;
-      if (qrData.qrcode?.base64) return qrData.qrcode.base64;
+      // Verificar formatos reais de resposta do DinastiAPI
+      if (typeof qrData?.data?.QRCode === 'string') {
+        const normalized = normalizeQRCodeValue(qrData.data.QRCode).trim();
+        if (normalized) return normalized;
+      }
+
+      if (typeof qrData?.data?.qrcode?.base64 === 'string') {
+        const normalized = normalizeQRCodeValue(qrData.data.qrcode.base64).trim();
+        if (normalized) return normalized;
+      }
+
+      if (typeof qrData?.data?.base64 === 'string') {
+        const normalized = normalizeQRCodeValue(qrData.data.base64).trim();
+        if (normalized) return normalized;
+      }
+
+      if (typeof qrData?.qrcode?.base64 === 'string') {
+        const normalized = normalizeQRCodeValue(qrData.qrcode.base64).trim();
+        if (normalized) return normalized;
+      }
     }
 
     // Se não for 404 ou última tentativa, throw erro
