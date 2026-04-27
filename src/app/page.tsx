@@ -6,10 +6,15 @@ import Image from 'next/image';
 export default function Home() {
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('');
+  const [loadingAction, setLoadingAction] = useState<'create' | 'connect' | 'qr' | null>(null);
+  const [creationResult, setCreationResult] = useState('');
+  const [connectionResult, setConnectionResult] = useState('');
+  const [qrStatus, setQrStatus] = useState('');
   const [qrCode, setQrCode] = useState('');
   const [error, setError] = useState('');
+  const [instanceToken, setInstanceToken] = useState('');
+  const [instanceCreated, setInstanceCreated] = useState(false);
+  const [instanceConnected, setInstanceConnected] = useState(false);
 
   const sanitizeInput = (value: string) => {
     return value.replace(/[^a-zA-Z0-9]/g, '');
@@ -19,15 +24,27 @@ export default function Home() {
     return value.startsWith('data:image/') ? value : `data:image/png;base64,${value}`;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const parseError = async (response: Response) => {
+    try {
+      const payload = await response.json();
+      return payload.error || 'Erro ao processar';
+    } catch {
+      return 'Erro ao processar';
+    }
+  };
+
+  const handleCreateInstance = async () => {
     setError('');
     setQrCode('');
-    setLoading(true);
+    setCreationResult('');
+    setConnectionResult('');
+    setQrStatus('');
+    setInstanceToken('');
+    setInstanceCreated(false);
+    setInstanceConnected(false);
+    setLoadingAction('create');
 
     try {
-      setStep('Criando instância...');
-
       const response = await fetch('/api/create-instance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,31 +52,90 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Erro ao processar');
+        throw new Error(await parseError(response));
       }
 
-      setStep('Gerando QR Code...');
       const data = await response.json();
+      const createdToken = data.instanceToken || token;
 
-      if (data.qrCode) {
-        setQrCode(data.qrCode);
-        setStep('QR Code gerado com sucesso!');
-      } else {
-        throw new Error('QR Code não foi retornado');
-      }
-
-      // Acionar webhook do N8N
-      await fetch('https://dinastia-n8n-webhook.rphhuc.easypanel.host/webhook/criar_instancia_qrcode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, token, status: 'completed' }),
-      });
-
+      setInstanceToken(createdToken);
+      setInstanceCreated(true);
+      setCreationResult(`Instância criada com sucesso. Token: ${createdToken}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
+  const handleConnectInstance = async () => {
+    setError('');
+    setConnectionResult('');
+    setQrStatus('');
+    setQrCode('');
+    setLoadingAction('connect');
+
+    try {
+      const response = await fetch('/api/connect-instance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: instanceToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+
+      const data = await response.json();
+      setInstanceConnected(true);
+      setConnectionResult(
+        data?.data?.details
+          ? `Instância conectada: ${data.data.details}`
+          : 'Instância conectada com sucesso.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleGenerateQRCode = async () => {
+    setError('');
+    setQrCode('');
+    setQrStatus('Aguardando QR Code...');
+    setLoadingAction('qr');
+
+    try {
+      const response = await fetch('/api/generate-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: instanceToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+
+      const data = await response.json();
+
+      if (!data.qrCode) {
+        throw new Error('QR Code não foi retornado');
+      }
+
+      setQrCode(data.qrCode);
+      setQrStatus('QR Code gerado com sucesso!');
+
+      await fetch('https://dinastia-n8n-webhook.rphhuc.easypanel.host/webhook/criar_instancia_qrcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, token: instanceToken, status: 'completed' }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+      setQrStatus('');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
@@ -68,7 +144,13 @@ export default function Home() {
     setToken('');
     setQrCode('');
     setError('');
-    setStep('');
+    setCreationResult('');
+    setConnectionResult('');
+    setQrStatus('');
+    setInstanceToken('');
+    setInstanceCreated(false);
+    setInstanceConnected(false);
+    setLoadingAction(null);
   };
 
   return (
@@ -78,50 +160,93 @@ export default function Home() {
           Conectar Instância (QR Code)
         </h1>
 
-        {!qrCode && (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="text-left">
-              <label className="block text-white text-sm font-semibold mb-2">
-                Nome da Instância
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(sanitizeInput(e.target.value))}
-                placeholder="Ex: Cliente1"
-                required
-                className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
-              />
-            </div>
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
+          <div className="text-left">
+            <label className="block text-white text-sm font-semibold mb-2">
+              Nome da Instância
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(sanitizeInput(e.target.value))}
+              placeholder="Ex: Cliente1"
+              required
+              className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
+            />
+          </div>
 
-            <div className="text-left">
-              <label className="block text-white text-sm font-semibold mb-2">
-                Token da Instância
-              </label>
-              <input
-                type="text"
-                value={token}
-                onChange={(e) => setToken(sanitizeInput(e.target.value))}
-                placeholder="Ex: token123abc"
-                required
-                className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
-              />
-            </div>
+          <div className="text-left">
+            <label className="block text-white text-sm font-semibold mb-2">
+              Token da Instância
+            </label>
+            <input
+              type="text"
+              value={token}
+              onChange={(e) => setToken(sanitizeInput(e.target.value))}
+              placeholder="Ex: token123abc"
+              required
+              className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
+            />
+          </div>
 
-            <button
-              type="submit"
-              disabled={loading || !name || !token}
-              className="w-full py-4 bg-[#e89d2c] text-black font-bold rounded-lg hover:bg-[#c78523] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#e89d2c]/20"
-            >
-              {loading ? 'Processando...' : 'Conectar Instância'}
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={handleCreateInstance}
+            disabled={loadingAction !== null || !name || !token}
+            className="w-full py-4 bg-[#e89d2c] text-black font-bold rounded-lg hover:bg-[#c78523] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#e89d2c]/20"
+          >
+            {loadingAction === 'create' ? 'Criando...' : 'Criar Instância'}
+          </button>
+        </form>
+
+        {creationResult && (
+          <div className="mt-6 text-emerald-400 text-sm font-medium">
+            {creationResult}
+          </div>
         )}
 
-        {loading && (
+        {instanceCreated && !instanceConnected && (
+          <button
+            type="button"
+            onClick={handleConnectInstance}
+            disabled={loadingAction !== null || !instanceToken}
+            className="mt-6 w-full py-4 bg-[#1f8bff] text-white font-bold rounded-lg hover:bg-[#1572d6] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#1f8bff]/20"
+          >
+            {loadingAction === 'connect' ? 'Conectando...' : 'Conectar Instância'}
+          </button>
+        )}
+
+        {connectionResult && (
+          <div className="mt-6 text-emerald-400 text-sm font-medium">
+            {connectionResult}
+          </div>
+        )}
+
+        {instanceConnected && !qrCode && (
+          <button
+            type="button"
+            onClick={handleGenerateQRCode}
+            disabled={loadingAction !== null || !instanceToken}
+            className="mt-6 w-full py-4 bg-[#7c3aed] text-white font-bold rounded-lg hover:bg-[#6d28d9] disabled:bg-[#555] disabled:text-[#888] disabled:cursor-not-allowed transition-all hover:translate-y-[-2px] hover:shadow-lg shadow-[#7c3aed]/20"
+          >
+            {loadingAction === 'qr' ? 'Gerando QR Code...' : 'Gerar QR Code'}
+          </button>
+        )}
+
+        {loadingAction && (
           <div className="mt-8">
             <div className="w-6 h-6 border-2 border-white/10 border-l-[#e89d2c] rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-gray-400 text-sm font-medium">{step}</p>
+            <p className="text-gray-400 text-sm font-medium">
+              {loadingAction === 'create' && 'Criando instância...'}
+              {loadingAction === 'connect' && 'Conectando instância...'}
+              {loadingAction === 'qr' && 'Aguardando QR Code...'}
+            </p>
+          </div>
+        )}
+
+        {qrStatus && (
+          <div className="mt-6 text-emerald-400 text-sm font-medium">
+            {qrStatus}
           </div>
         )}
 
