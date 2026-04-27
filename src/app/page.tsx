@@ -168,8 +168,15 @@ export default function Home() {
       }
 
       const data = await response.json();
-      const status = data?.data;
-      const connected = Boolean(status?.connected || status?.loggedIn || status?.session?.connected);
+      const status = data?.data?.data ?? data?.data;
+      const connected = Boolean(
+        status?.connected ||
+        status?.loggedIn ||
+        status?.session?.connected ||
+        status?.session?.loggedIn ||
+        status?.data?.connected ||
+        status?.data?.loggedIn,
+      );
 
       setConnectionStatusChecked(true);
       setStatusConnected(connected);
