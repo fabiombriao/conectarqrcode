@@ -331,7 +331,7 @@ export default function Home() {
           </div>
         )}
 
-        {qrCode && (
+        {qrCode && !connectionStatusChecked && (
           <button
             type="button"
             onClick={handleCheckConnectionStatus}
