@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          instance_name: name,
-          instance_token: token,
-          locationId,
-          providerName,
+          dinastiapi_instance_name: name,
+          dinastiapi_instance_token: token,
+          location_id: locationId,
+          provider_name: providerName,
           status: 'connected',
-          DinastiAPI_BASE_URL: process.env.DINASTIAPI_BASE_URL,
-          DinASTIAPI_ADMIN_TOKEN: process.env.DINASTIAPI_ADMIN_TOKEN,
+          dinastiapi_base_url: process.env.DINASTIAPI_BASE_URL,
+          dinastiapi_admin_token: process.env.DINASTIAPI_ADMIN_TOKEN,
         }),
       });
 
