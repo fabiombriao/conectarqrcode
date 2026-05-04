@@ -5,10 +5,10 @@ export async function POST(request: NextRequest) {
   try {
     const { apiBase, adminToken } = getDinastiConfig();
     const body = await request.json();
-    const { name, token: userToken } = body;
+    const { name, token: userToken, providerName } = body;
 
-    if (!name || !userToken) {
-      return NextResponse.json({ error: 'Nome e token são obrigatórios' }, { status: 400 });
+    if (!name || !userToken || !providerName) {
+      return NextResponse.json({ error: 'Nome, token e nome do provider são obrigatórios' }, { status: 400 });
     }
 
     const createResponse = await fetch(`${apiBase}/admin/users`, {
