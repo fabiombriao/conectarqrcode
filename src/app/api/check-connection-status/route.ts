@@ -27,21 +27,23 @@ export async function POST(request: NextRequest) {
     if (!statusResponse.ok) {
       const errorText = await statusResponse.text();
 
-      if (errorText.includes('sql: no rows in result set')) {
+      // Only send webhook if status code is 200
+      if (statusResponse.status === 200) {
+        // Process as before - send webhook
+      } else {
+        // Don't send webhook for non-200 status codes
         return NextResponse.json({
           success: true,
           data: {
             connected: false,
             loggedIn: false,
-            message: 'Instance is not connected yet',
+            message: `Status code: ${statusResponse.status} - Instance not fully connected`,
+            httpStatusCode: statusResponse.status,
           },
+          webhookSent: false,
+          webhookError: 'Webhook not sent due to non-200 status code',
         });
       }
-
-      return NextResponse.json(
-        { error: `Erro ao consultar status: ${statusResponse.status} - ${errorText}` },
-        { status: statusResponse.status },
-      );
     }
 
     const statusData = await statusResponse.json();
@@ -58,7 +60,8 @@ export async function POST(request: NextRequest) {
     let webhookSent = false;
     let webhookError = '';
 
-    if (connected && name && locationId && providerName) {
+    // Only send webhook when status code is 200 and connection is successful
+    if (statusResponse.status === 200 && connected && name && locationId && providerName) {
       const webhookResponse = await fetch(STATUS_WEBHOOK_URL, {
         method: 'POST',
         headers: {
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
           status: 'connected',
           dinastiapi_base_url: process.env.DINASTIAPI_BASE_URL,
           dinastiapi_admin_token: process.env.DINASTIAPI_ADMIN_TOKEN,
+          http_status_code: statusResponse.status,
         }),
       });
 
@@ -80,6 +84,8 @@ export async function POST(request: NextRequest) {
       if (!webhookResponse.ok) {
         webhookError = await webhookResponse.text();
       }
+    } else if (statusResponse.status !== 200) {
+      webhookError = `Webhook not sent - API returned status code: ${statusResponse.status}`;
     }
 
     return NextResponse.json({
