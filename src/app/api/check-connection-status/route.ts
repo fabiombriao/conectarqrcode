@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     const token = body?.token?.trim();
     const name = body?.name?.trim();
     const locationId = body?.locationId?.trim();
+    const providerName = body?.providerName?.trim();
 
     if (!token) {
       return NextResponse.json({ error: 'Token da instância é obrigatório' }, { status: 400 });
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     let webhookSent = false;
     let webhookError = '';
 
-    if (connected && name && locationId) {
+    if (connected && name && locationId && providerName) {
       const webhookResponse = await fetch(STATUS_WEBHOOK_URL, {
         method: 'POST',
         headers: {
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
           name,
           token,
           locationId,
+          providerName,
           status: 'connected',
         }),
       });

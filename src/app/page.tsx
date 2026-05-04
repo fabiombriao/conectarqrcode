@@ -7,6 +7,7 @@ export default function Home() {
   const [name, setName] = useState('');
   const [token, setToken] = useState('');
   const [locationId, setLocationId] = useState('');
+  const [providerName, setProviderName] = useState('');
   const [loadingAction, setLoadingAction] = useState<'create' | 'connect' | 'qr' | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [creationResult, setCreationResult] = useState('');
@@ -58,7 +59,7 @@ export default function Home() {
       const response = await fetch('/api/create-instance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, token }),
+        body: JSON.stringify({ name, token, providerName }),
       });
 
       if (!response.ok) {
@@ -199,6 +200,7 @@ export default function Home() {
   const resetForm = () => {
     setName('');
     setToken('');
+    setProviderName('');
     setQrCode('');
     setError('');
     setCreationResult('');
@@ -223,6 +225,19 @@ export default function Home() {
         </h1>
 
         <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
+          <div className="text-left">
+            <label className="block text-white text-sm font-semibold mb-2">
+              Nome do Provider
+            </label>
+            <input
+              type="text"
+              value={providerName}
+              onChange={(e) => setProviderName(e.target.value)}
+              placeholder="Ex: MyProvider"
+              required
+              className="w-full p-3.5 bg-[#1a1a1a] border-2 border-[#333] rounded-lg text-white placeholder-gray-600 focus:border-[#e89d2c] focus:outline-none focus:ring-2 focus:ring-[#e89d2c]/15 transition-all"
+            />
+          </div>
           <div className="text-left">
             <label className="block text-white text-sm font-semibold mb-2">
               Nome da Instância
